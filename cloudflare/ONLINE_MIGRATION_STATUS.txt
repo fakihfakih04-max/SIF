@@ -1,0 +1,16 @@
+SIF ONLINE MIGRATION STATUS
+
+Prepared safely:
+- Cloudflare Python Worker configuration
+- FastAPI Worker shell
+- Static frontend binding
+- D1 binding template
+- D1 schema generated from current SIF SQLite database
+- Initial admin seed template
+
+NOT YET PRODUCTION READY:
+- Existing 76 API routes still use SQLAlchemy/SQLite.
+- They must be migrated to D1 before Deploy.
+- Do not deploy the migration shell as the production SIF application.
+
+Windows/offline application remains intact.

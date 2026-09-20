@@ -1,0 +1,9 @@
+PHASE 4
+Products and POS are now connected to the backend API.
+- Create products in the live database.
+- Search products.
+- Build a POS cart.
+- Complete a sale.
+- Stock quantity is automatically reduced.
+- Insufficient stock is blocked.
+- Sales receive INV-00001 style invoice numbers.

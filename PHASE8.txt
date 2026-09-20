@@ -1,0 +1,6 @@
+PHASE 8
+- Computers / laptops / phones / accessories are now catalog pages with product photos, prices, barcode, stock and actions.
+- Stock Management is now a real ALL ITEMS page showing every product across all categories.
+- Stock supports search, category filter, refresh, photo, code, barcode, retail, wholesale, VIP, quantity, edit and Price Checker.
+- Price Checker remains a separate professional window and can open directly for a selected item.
+- Demo database is seeded with 18 example items across phones, computers and accessories, each with a built-in product image so the catalog is not empty on first run.

@@ -1,0 +1,1 @@
+SIF Mobile & Computer Phase 38. Uses port 8017. START_SIF.bat kills any old listener on 8017, starts the current server, waits for readiness, then opens http://127.0.0.1:8017/?v=38. Excel export uses /api/products/export.xlsx and is verified in source/runtime.

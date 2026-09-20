@@ -1,0 +1,1 @@
+Phase 34: fixed Windows launcher and removed nested project-folder problem. START_SIF.bat is at the ZIP root. It launches RUN_SIF_SERVER.bat in a visible CMD window, waits up to 30 seconds for TCP 8017, then opens the browser.

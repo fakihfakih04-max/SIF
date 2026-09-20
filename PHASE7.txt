@@ -1,0 +1,8 @@
+PHASE 7
+- Product photos are selected with a real Windows/browser file picker (Pictures/Studio/etc.).
+- Photo is previewed before saving.
+- Product photos are stored with the product record.
+- Add/Edit product both support photo selection.
+- Price Checker opens as a separate professional window.
+- Price Checker shows product photo, SKU/barcode, stock, Retail, Wholesale, VIP and selected Customer Price.
+- Works for phones, laptops and accessories because the photo field belongs to every product.

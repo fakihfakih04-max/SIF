@@ -1,0 +1,11 @@
+PHASE 6
+Products now support:
+- Photo URL
+- Edit
+- Delete (soft delete)
+- Retail price
+- Wholesale price
+- VIP price
+- Price Checker by product name, SKU or barcode
+- Customer type: Retail / Wholesale / VIP
+- Stock display

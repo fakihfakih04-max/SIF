@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sif-mobile-computer",
-  "main": "cloudflare/src/worker.py",
+  "main": "src/worker.py",
   "compatibility_date": "2026-09-19",
   "compatibility_flags": ["python_workers"],
   "assets": {

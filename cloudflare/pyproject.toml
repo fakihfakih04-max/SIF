@@ -1,14 +1,10 @@
 [project]
 name = "sif-mobile-computer-cloudflare"
 version = "1.0.0"
-description = "SIF Mobile & Computer Cloudflare Worker migration"
+description = "SIF Mobile & Computer Cloudflare Worker"
 requires-python = ">=3.13"
 dependencies = [
   "fastapi",
-]
-
-[dependency-groups]
-dev = [
   "workers-py",
   "workers-runtime-sdk",
 ]

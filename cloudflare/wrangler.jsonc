@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "sif-mobile-computer-db",
-      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+      "database_id": "33453539-4c5f-4f4d-84e0-e6fa8a7df529"
     }
   ]
 }

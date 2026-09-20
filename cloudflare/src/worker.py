@@ -1,14 +1,44 @@
-[project]
-name = "sif-mobile-computer-cloudflare"
-version = "1.0.0"
-description = "SIF Mobile & Computer Cloudflare Worker"
-requires-python = ">=3.13"
-dependencies = [
-  "fastapi",
-]
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+from workers import asgi
 
-[dependency-groups]
-dev = [
-  "workers-py",
-  "workers-runtime-sdk",
-]
+app = FastAPI(title="SIF Mobile & Computer")
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "service": "SIF Mobile & Computer",
+        "mode": "cloudflare-migration",
+    }
+
+
+@app.get("/api/online-status")
+async def online_status(request: Request):
+    return {
+        "online": True,
+        "database": "D1",
+        "status": "connected",
+    }
+
+
+@app.get("/{path:path}")
+async def frontend(path: str, request: Request):
+    env = request.scope["env"]
+
+    path = path or "index.html"
+
+    asset_url = f"https://assets.local/{path}"
+    response = await env.ASSETS.fetch(asset_url)
+
+    body = await response.bytes()
+
+    return Response(
+        content=body,
+        status=response.status,
+        headers=dict(response.headers),
+    )
+
+
+Default = asgi.entrypoint(app)

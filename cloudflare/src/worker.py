@@ -44,186 +44,175 @@ class Default(WorkerEntrypoint):
                     return Response.json({"detail": "Invalid username or password."}, status=401)
                 return Response.json({"user": {"id": u["id"], "username": u["username"], "role": u["role"], "active": bool(u["active"])}})
 
-            # Dashboard diagnostics + dashboard
+            # Dashboard - robust D1 version
             if path == "/api/dashboard-test" and method == "GET":
-                checks = []
-                errors = []
-                async def check(name, sql):
-                    try:
-                        r = await self.env.DB.prepare(sql).run()
-                        rows = r.get("results", [])
-                        checks.append({"name": name, "ok": True, "rows": rows[:5]})
-                    except Exception as ex:
-                        errors.append({"name": name, "error": str(ex)})
-                await check("database", "SELECT 1 AS ok")
-                await check("tables", "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-                for table in ("products","customers","suppliers","repairs","sales","purchases","expenses"):
-                    await check(f"table:{table}", f"SELECT COUNT(*) AS count FROM {table}")
-                await check("products_columns", "PRAGMA table_info(products)")
-                await check("sales_columns", "PRAGMA table_info(sales)")
-                return Response.json({
-                    "ok": len(errors) == 0,
-                    "checks": checks,
-                    "errors": errors,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }, status=200)
+                result = {"ok": True, "database": False, "tables": [], "errors": []}
+                try:
+                    q = await self.env.DB.prepare("SELECT 1 AS ok").run()
+                    result["database"] = True
+                    result["probe"] = q.get("results", [])
+                except Exception as ex:
+                    result["ok"] = False
+                    result["errors"].append("DB probe: " + str(ex))
+                try:
+                    q = await self.env.DB.prepare(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    ).run()
+                    result["tables"] = q.get("results", [])
+                except Exception as ex:
+                    result["ok"] = False
+                    result["errors"].append("Tables: " + str(ex))
+                return Response.json(result, status=200)
 
             if path == "/api/dashboard" and method == "GET":
-                totals = {
-                    "products": 0, "customers": 0, "suppliers": 0, "repairs": 0,
-                    "quantity": 0, "stock_cost": 0, "stock_sales": 0,
-                    "low_stock": 0, "customer_receivables": 0, "supplier_payables": 0
+                data = {
+                    "totals": {
+                        "products": 0, "customers": 0, "suppliers": 0, "repairs": 0,
+                        "quantity": 0, "stock_quantity": 0, "stock_cost": 0,
+                        "stock_sales": 0, "stock_sales_value": 0, "low_stock": 0,
+                        "customer_receivables": 0, "supplier_payables": 0
+                    },
+                    "today": {
+                        "sales": 0, "sales_count": 0, "purchases": 0,
+                        "purchases_count": 0, "expenses": 0, "expenses_count": 0
+                    },
+                    "sales_7_days": [],
+                    "repair_status": {},
+                    "top_products": [],
+                    "recent_sales": [],
+                    "low_stock_items": [],
+                    "errors": [],
+                    "diagnostic": {"version": "DASHBOARD-FIX-V4", "ok": True}
                 }
-                errors = []
 
-                async def scalar(name, sql, default=0):
+                async def one(label, sql):
                     try:
-                        q = await self.env.DB.prepare(sql).run()
-                        row = (q.get("results", [{}]) or [{}])[0] or {}
-                        return row
+                        r = await self.env.DB.prepare(sql).run()
+                        rows = r.get("results", []) or []
+                        return rows[0] if rows else {}
                     except Exception as ex:
-                        errors.append({"query": name, "error": str(ex)})
+                        data["errors"].append(label + ": " + str(ex))
                         return {}
 
-                for table, key in [
-                    ("products","products"),("customers","customers"),
-                    ("suppliers","suppliers"),("repairs","repairs")
-                ]:
-                    row = await scalar(f"count_{table}", f"SELECT COUNT(*) AS c FROM {table}")
-                    totals[key] = row.get("c", 0)
+                async def many(label, sql):
+                    try:
+                        r = await self.env.DB.prepare(sql).run()
+                        return r.get("results", []) or []
+                    except Exception as ex:
+                        data["errors"].append(label + ": " + str(ex))
+                        return []
 
-                row = await scalar(
+                # Basic counts
+                for table, key in [
+                    ("products","products"), ("customers","customers"),
+                    ("suppliers","suppliers"), ("repairs","repairs")
+                ]:
+                    row = await one("count_" + table, f"SELECT COUNT(*) AS c FROM {table}")
+                    data["totals"][key] = row.get("c", 0) or 0
+
+                # Inventory
+                row = await one(
                     "inventory",
                     "SELECT COALESCE(SUM(quantity),0) AS qty, "
                     "COALESCE(SUM(quantity*cost),0) AS cost, "
-                    "COALESCE(SUM(quantity*sale_price),0) AS sales "
-                    "FROM products"
+                    "COALESCE(SUM(quantity*sale_price),0) AS sales FROM products"
                 )
-                totals["quantity"] = row.get("qty", 0)
-                totals["stock_quantity"] = row.get("qty", 0)
-                totals["stock_cost"] = row.get("cost", 0)
-                totals["stock_sales"] = row.get("sales", 0)
-                totals["stock_sales_value"] = row.get("sales", 0)
+                data["totals"]["quantity"] = row.get("qty", 0) or 0
+                data["totals"]["stock_quantity"] = row.get("qty", 0) or 0
+                data["totals"]["stock_cost"] = row.get("cost", 0) or 0
+                data["totals"]["stock_sales"] = row.get("sales", 0) or 0
+                data["totals"]["stock_sales_value"] = row.get("sales", 0) or 0
 
-                row = await scalar(
+                row = await one(
                     "low_stock",
                     "SELECT COUNT(*) AS c FROM products "
-                    "WHERE quantity <= reorder_level AND active = 1"
+                    "WHERE quantity <= COALESCE(reorder_level,0)"
                 )
-                totals["low_stock"] = row.get("c", 0)
+                data["totals"]["low_stock"] = row.get("c", 0) or 0
 
-                today = await scalar(
+                # Today's figures
+                row = await one(
                     "today_sales",
                     "SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS count "
                     "FROM sales WHERE date(created_at)=date('now')"
                 )
+                data["today"]["sales"] = row.get("total", 0) or 0
+                data["today"]["sales_count"] = row.get("count", 0) or 0
 
-                purchases_today = await scalar(
+                row = await one(
                     "today_purchases",
                     "SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS count "
                     "FROM purchases WHERE date(created_at)=date('now')"
                 )
+                data["today"]["purchases"] = row.get("total", 0) or 0
+                data["today"]["purchases_count"] = row.get("count", 0) or 0
 
-                expenses_today = await scalar(
+                row = await one(
                     "today_expenses",
                     "SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count "
                     "FROM expenses WHERE date(created_at)=date('now')"
                 )
+                data["today"]["expenses"] = row.get("total", 0) or 0
+                data["today"]["expenses_count"] = row.get("count", 0) or 0
 
-                row = await scalar(
-                    "customer_receivables",
+                row = await one(
+                    "customer_balance",
                     "SELECT COALESCE(SUM(balance),0) AS balance FROM customers"
                 )
-                totals["customer_receivables"] = row.get("balance", 0)
+                data["totals"]["customer_receivables"] = row.get("balance", 0) or 0
 
-                row = await scalar(
-                    "supplier_payables",
+                row = await one(
+                    "supplier_balance",
                     "SELECT COALESCE(SUM(balance),0) AS balance FROM suppliers"
                 )
-                totals["supplier_payables"] = row.get("balance", 0)
+                data["totals"]["supplier_payables"] = row.get("balance", 0) or 0
 
-                series = []
-                try:
-                    q = await self.env.DB.prepare(
-                        "SELECT date(created_at) AS date, COALESCE(SUM(total),0) AS total "
-                        "FROM sales WHERE date(created_at)>=date('now','-6 day') "
-                        "GROUP BY date(created_at) ORDER BY date(created_at)"
-                    ).run()
-                    series = q.get("results", [])
-                except Exception as ex:
-                    errors.append({"query": "sales_7_days", "error": str(ex)})
+                data["sales_7_days"] = await many(
+                    "sales_7_days",
+                    "SELECT date(created_at) AS date, COALESCE(SUM(total),0) AS total "
+                    "FROM sales WHERE date(created_at)>=date('now','-6 day') "
+                    "GROUP BY date(created_at) ORDER BY date(created_at)"
+                )
+                rs = await many(
+                    "repair_status",
+                    "SELECT status, COUNT(*) AS count FROM repairs GROUP BY status"
+                )
+                data["repair_status"] = {
+                    str(x.get("status") or "unknown"): x.get("count", 0) or 0 for x in rs
+                }
 
-                repair_status = {}
-                try:
-                    q = await self.env.DB.prepare(
-                        "SELECT status, COUNT(*) AS count FROM repairs GROUP BY status"
-                    ).run()
-                    repair_status = {
-                        str(x.get("status") or "unknown"): x.get("count", 0)
-                        for x in q.get("results", [])
-                    }
-                except Exception as ex:
-                    errors.append({"query": "repair_status", "error": str(ex)})
+                data["top_products"] = await many(
+                    "top_products",
+                    "SELECT p.name, p.sku, SUM(si.quantity) AS qty, "
+                    "SUM(si.total) AS amount FROM sale_items si "
+                    "JOIN products p ON p.id=si.product_id "
+                    "JOIN sales s ON s.id=si.sale_id "
+                    "WHERE date(s.created_at)>=date('now','-30 day') "
+                    "GROUP BY si.product_id ORDER BY qty DESC LIMIT 5"
+                )
 
-                top_products = []
-                try:
-                    q = await self.env.DB.prepare(
-                        "SELECT p.name, p.sku, SUM(si.quantity) AS qty, "
-                        "SUM(si.total) AS amount "
-                        "FROM sale_items si JOIN products p ON p.id=si.product_id "
-                        "JOIN sales s ON s.id=si.sale_id "
-                        "WHERE date(s.created_at)>=date('now','-30 day') "
-                        "GROUP BY si.product_id ORDER BY qty DESC LIMIT 5"
-                    ).run()
-                    top_products = q.get("results", [])
-                except Exception as ex:
-                    errors.append({"query": "top_products", "error": str(ex)})
+                data["recent_sales"] = await many(
+                    "recent_sales",
+                    "SELECT s.invoice_no, s.total, s.payment_method, s.created_at, "
+                    "COALESCE(c.name,'Walk-in') AS customer_name "
+                    "FROM sales s LEFT JOIN customers c ON c.id=s.customer_id "
+                    "ORDER BY s.id DESC LIMIT 8"
+                )
 
-                recent_sales = []
-                try:
-                    q = await self.env.DB.prepare(
-                        "SELECT s.invoice_no, s.total, s.payment_method, s.created_at, "
-                        "COALESCE(c.name,'Walk-in') AS customer_name "
-                        "FROM sales s LEFT JOIN customers c ON c.id=s.customer_id "
-                        "ORDER BY s.id DESC LIMIT 8"
-                    ).run()
-                    recent_sales = q.get("results", [])
-                except Exception as ex:
-                    errors.append({"query": "recent_sales", "error": str(ex)})
+                data["low_stock_items"] = await many(
+                    "low_stock_items",
+                    "SELECT id, name, sku, quantity, reorder_level FROM products "
+                    "WHERE quantity <= COALESCE(reorder_level,0) "
+                    "ORDER BY quantity ASC LIMIT 10"
+                )
 
-                low_stock_items = []
-                try:
-                    q = await self.env.DB.prepare(
-                        "SELECT id, name, sku, quantity, reorder_level "
-                        "FROM products WHERE quantity <= reorder_level AND active=1 "
-                        "ORDER BY quantity ASC LIMIT 10"
-                    ).run()
-                    low_stock_items = q.get("results", [])
-                except Exception as ex:
-                    errors.append({"query": "low_stock_items", "error": str(ex)})
+                data["diagnostic"]["ok"] = len(data["errors"]) == 0
+                data["diagnostic"]["error_count"] = len(data["errors"])
+                data["diagnostic"]["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-                return Response.json({
-                    "totals": totals,
-                    "today": {
-                        "sales": today.get("total", 0),
-                        "sales_count": today.get("count", 0),
-                        "purchases": purchases_today.get("total", 0),
-                        "purchases_count": purchases_today.get("count", 0),
-                        "expenses": expenses_today.get("total", 0),
-                        "expenses_count": expenses_today.get("count", 0)
-                    },
-                    "sales_7_days": series,
-                    "repair_status": repair_status,
-                    "top_products": top_products,
-                    "recent_sales": recent_sales,
-                    "low_stock_items": low_stock_items,
-                    "errors": errors,
-                    "diagnostic": {
-                        "ok": len(errors) == 0,
-                        "error_count": len(errors),
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                }, status=200)
+                # IMPORTANT: always 200. Database/query errors are returned in JSON instead
+                # of becoming the generic frontend "Server error".
+                return Response.json(data, status=200)
 
             # Simple table GET/POST/PUT/DELETE routes
             tables = {

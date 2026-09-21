@@ -1,4 +1,4 @@
-from workers import WorkerEntrypoint
+from workers import WorkerEntrypoint, Response
 
 
 class Default(WorkerEntrypoint):
@@ -6,18 +6,16 @@ class Default(WorkerEntrypoint):
         url = request.url
 
         if url.endswith("/health"):
-            return Response(
-                '{"status":"ok","service":"SIF Mobile & Computer"}',
-                headers={"Content-Type": "application/json"},
-            )
+            return Response.json({
+                "status": "ok",
+                "service": "SIF Mobile & Computer"
+            })
 
         if url.endswith("/api/online-status"):
-            return Response(
-                '{"online":true,"database":"D1","status":"connected"}',
-                headers={"Content-Type": "application/json"},
-            )
+            return Response.json({
+                "online": True,
+                "database": "D1",
+                "status": "connected"
+            })
 
-        return Response(
-            "SIF Mobile & Computer - Cloudflare Online",
-            headers={"Content-Type": "text/plain"},
-        )
+        return await self.env.ASSETS.fetch(request)

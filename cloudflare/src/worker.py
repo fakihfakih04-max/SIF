@@ -1,44 +1,23 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import Response
-from workers import asgi
-
-app = FastAPI(title="SIF Mobile & Computer")
+from workers import WorkerEntrypoint
 
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "ok",
-        "service": "SIF Mobile & Computer",
-        "mode": "cloudflare-migration",
-    }
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        url = request.url
 
+        if url.endswith("/health"):
+            return Response(
+                '{"status":"ok","service":"SIF Mobile & Computer"}',
+                headers={"Content-Type": "application/json"},
+            )
 
-@app.get("/api/online-status")
-async def online_status(request: Request):
-    return {
-        "online": True,
-        "database": "D1",
-        "status": "connected",
-    }
+        if url.endswith("/api/online-status"):
+            return Response(
+                '{"online":true,"database":"D1","status":"connected"}',
+                headers={"Content-Type": "application/json"},
+            )
 
-
-@app.get("/{path:path}")
-async def frontend(path: str, request: Request):
-    env = request.scope["env"]
-
-    path = path or "index.html"
-
-    asset_url = f"https://assets.local/{path}"
-    response = await env.ASSETS.fetch(asset_url)
-
-    body = await response.bytes()
-
-    return Response(
-        content=body,
-        status=response.status,
-        headers=dict(response.headers),
-    )
-
-
-Default = asgi.entrypoint(app)
+        return Response(
+            "SIF Mobile & Computer - Cloudflare Online",
+            headers={"Content-Type": "text/plain"},
+        )

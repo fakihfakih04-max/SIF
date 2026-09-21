@@ -217,7 +217,7 @@ function settings(){modulePage("Settings","Company, currency, invoice, tax and s
 
 /* Phase 4 live module helpers */
 let liveProducts=[];
-const API_BASE = "http://127.0.0.1:8045";
+const API_BASE = "";
 async function apiJSON(url, options={}){
   try{
     const r=await fetch(API_BASE + url, options);
@@ -226,7 +226,7 @@ async function apiJSON(url, options={}){
     return d;
   }catch(e){
     if(e instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(e.message||"")){
-      throw new Error("SIF server is not running. Close this page, run START_SIF.bat, then open http://127.0.0.1:8017/");
+      throw new Error("Online API is unavailable. Please refresh the page and try again.");
     }
     throw e;
   }

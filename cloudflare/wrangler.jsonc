@@ -5,6 +5,9 @@
   "compatibility_date": "2026-09-19",
   "compatibility_flags": ["python_workers"],
   "assets": {
+   "python_workers",
+    "disable_python_external_sdk"
+  ],
     "directory": "../frontend",
     "binding": "ASSETS",
     "run_worker_first": true

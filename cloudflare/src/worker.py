@@ -299,6 +299,7 @@ class Default(WorkerEntrypoint):
                     return Response.json({"key":key,"value":value})
 
             # Serve static frontend
+            if path == "/api/dashboard-test" and method == "GET":
             return await self.env.ASSETS.fetch(request)
         except Exception as e:
             return Response.json({"detail": "Server error", "error": str(e)}, status=500)
